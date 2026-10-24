@@ -73,7 +73,7 @@
 
 ### 2.1 Syntax and everyday Python
 
--   [ ] 2.1.1 Indentation and code blocks
+-   [x] 2.1.1 Indentation and code blocks
 -   [ ] 2.1.2 Variables, naming, and dynamic typing
 -   [ ] 2.1.3 Numbers, strings, booleans, and `None`
 -   [ ] 2.1.4 Operators and truthiness
