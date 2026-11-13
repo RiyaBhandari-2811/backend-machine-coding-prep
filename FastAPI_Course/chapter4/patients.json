@@ -1,0 +1,52 @@
+{
+  "P001": {
+    "name": "John Smith",
+    "city": "New York",
+    "age": 35,
+    "gender": "Male",
+    "height": 1.80,
+    "weight": 85,
+    "bmi": 26.23,
+    "verdict": "Overweight"
+  },
+  "P002": {
+    "name": "Sarah Johnson",
+    "city": "Los Angeles",
+    "age": 28,
+    "gender": "Female",
+    "height": 1.65,
+    "weight": 62,
+    "bmi": 22.77,
+    "verdict": "Normal"
+  },
+  "P003": {
+    "name": "Michael Chen",
+    "city": "Chicago",
+    "age": 45,
+    "gender": "Male",
+    "height": 1.75,
+    "weight": 90,
+    "bmi": 29.39,
+    "verdict": "Overweight"
+  },
+  "P004": {
+    "name": "Emily Rodriguez",
+    "city": "Houston",
+    "age": 32,
+    "gender": "Female",
+    "height": 1.60,
+    "weight": 55,
+    "bmi": 21.48,
+    "verdict": "Normal"
+  },
+  "P005": {
+    "name": "David Kim",
+    "city": "Seattle",
+    "age": 29,
+    "gender": "Male",
+    "height": 1.78,
+    "weight": 72,
+    "bmi": 22.73,
+    "verdict": "Normal"
+  }
+}
