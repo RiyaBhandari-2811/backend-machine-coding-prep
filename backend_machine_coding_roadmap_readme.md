@@ -7,6 +7,16 @@
 > **Approach:** Learn concepts, implement them, test edge cases, explain
 > trade-offs, and revisit the same problem in all three languages.
 
+## ▶️ Where to start
+
+1. **FastAPI Task CRUD** (§4 / Sprint Day 1) — smallest end-to-end API first.
+2. **One OOP problem** (§8.3 — rate limiter or parking lot) under 30 min.
+3. **REST depth** (§3) + **testing** (§10, incl. TDD/BDD).
+4. **AI track (highest ROI for AI/ML roles):** go to **[AI-ENGINEERING.md](AI-ENGINEERING.md)** §8 and build, in order: **(1) RAG API with source citations → (2) a 2-tool agent → (3) add hybrid search + re-ranking + Redis caching → (4) wrap in Gradio.** Build #1 alone covers ~80% of a NetApp-style JD.
+5. For Ather-style roles, add **microservices (§12.13)** and **observability (§11.3)**.
+
+---
+
 ## How to use this checklist
 
 -   [ ] Check a subtopic only when you can explain it and implement a
@@ -330,6 +340,9 @@
 -   [ ] 10.8 Meaningful names, small functions, and readable code
 -   [ ] 10.9 Reproduce and debug failures from stack traces
 -   [ ] 10.10 Test the exact behavior required by the prompt
+-   [ ] 10.11 Test-driven development (TDD): the red-green-refactor cycle
+-   [ ] 10.12 Behaviour-driven development (BDD): Given-When-Then, Gherkin/Cucumber
+-   [ ] 10.13 The test pyramid: many unit, some integration, few end-to-end
 
 ## 11. Production readiness and deployment
 
@@ -361,6 +374,8 @@
 -   [ ] 11.3.3 Latency, traffic, error rate, and saturation
 -   [ ] 11.3.4 Metrics and basic tracing concepts
 -   [ ] 11.3.5 Diagnose failures from logs and metrics
+-   [ ] 11.3.6 Distributed tracing with OpenTelemetry (spans, context propagation)
+-   [ ] 11.3.7 The three pillars (logs, metrics, traces) and SLIs/SLOs
 
 ## 12. Performance and scalability fundamentals
 
@@ -379,11 +394,27 @@
 -   [ ] 12.12 Avoid premature microservices and unnecessary
     infrastructure
 
+### 12.13 Microservices & distributed systems (Ather / scalable-systems roles)
+
+-   [ ] 12.13.1 Monolith vs microservices: when each makes sense
+-   [ ] 12.13.2 Service decomposition by business capability / bounded context
+-   [ ] 12.13.3 Synchronous comms: REST and gRPC between services
+-   [ ] 12.13.4 Asynchronous comms: message queues / event streaming (Kafka, SQS, RabbitMQ)
+-   [ ] 12.13.5 API gateway, service discovery, and load balancing
+-   [ ] 12.13.6 Resilience: timeouts, retries, circuit breaker, bulkhead, backpressure
+-   [ ] 12.13.7 Data-per-service, eventual consistency, and the saga pattern
+-   [ ] 12.13.8 Delivery guarantees: idempotency, at-least-once vs exactly-once
+-   [ ] 12.13.9 Distributed tracing across service hops (correlation/trace IDs)
+
 ## 13. GenAI backend essentials
 
 > This section comes after the core backend and FastAPI foundations. The
 > goal is to build APIs around AI services, not to master all of AI in
 > this one-week sprint.
+>
+> 🤖 **Going deeper for AI/ML roles (e.g. NetApp):** building agents, advanced RAG
+> (hybrid search, re-ranking, agentic retrieval), LLM cost optimization, MLOps/eval,
+> and Streamlit/Gradio are covered in **[AI-ENGINEERING.md](AI-ENGINEERING.md)**.
 
 -   [ ] 13.1 Understand LLM, tokens, context windows, and model APIs
 -   [ ] 13.2 Call an external LLM API securely from a backend
