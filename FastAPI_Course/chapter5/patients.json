@@ -1,0 +1,52 @@
+{
+  "P001": {
+    "name": "Ananya Sharma",
+    "city": "Bangalore",
+    "age": 28,
+    "gender": "Female",
+    "height": 1.65,
+    "weight": 62,
+    "bmi": 22.77,
+    "verdict": "Normal"
+  },
+  "P002": {
+    "name": "Rajesh Kumar",
+    "city": "Delhi",
+    "age": 35,
+    "gender": "Male",
+    "height": 1.78,
+    "weight": 85,
+    "bmi": 26.84,
+    "verdict": "Overweight"
+  },
+  "P003": {
+    "name": "Priya Patel",
+    "city": "Mumbai",
+    "age": 26,
+    "gender": "Female",
+    "height": 1.60,
+    "weight": 58,
+    "bmi": 22.66,
+    "verdict": "Normal"
+  },
+  "P004": {
+    "name": "Arjun Verma",
+    "city": "Bangalore",
+    "age": 40,
+    "gender": "Male",
+    "height": 1.76,
+    "weight": 95,
+    "bmi": 30.68,
+    "verdict": "Obese"
+  },
+  "P005": {
+    "name": "Neha Singh",
+    "city": "Hyderabad",
+    "age": 32,
+    "gender": "Female",
+    "height": 1.62,
+    "weight": 65,
+    "bmi": 24.78,
+    "verdict": "Normal"
+  }
+}
