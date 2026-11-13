@@ -1,0 +1,42 @@
+[
+  {
+    "id": 1,
+    "name": "Rajesh Kumar",
+    "age": 35,
+    "height": 180,
+    "weight": 75,
+    "bmi": 23.15
+  },
+  {
+    "id": 2,
+    "name": "Priya Singh",
+    "age": 28,
+    "height": 165,
+    "weight": 58,
+    "bmi": 21.26
+  },
+  {
+    "id": 3,
+    "name": "Amit Patel",
+    "age": 42,
+    "height": 175,
+    "weight": 82,
+    "bmi": 26.77
+  },
+  {
+    "id": 4,
+    "name": "Neha Sharma",
+    "age": 31,
+    "height": 162,
+    "weight": 62,
+    "bmi": 23.61
+  },
+  {
+    "id": 5,
+    "name": "Vikram Desai",
+    "age": 48,
+    "height": 178,
+    "weight": 85,
+    "bmi": 26.82
+  }
+]
