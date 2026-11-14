@@ -1,0 +1,105 @@
+version: '3.8'
+
+services:
+  # Service 1: Flask API (Backend)
+  flask-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.flask
+    ports:
+      - "5000:5000"
+    environment:
+      - DEBUG=True
+      - DATABASE_URL=postgresql://user:password@postgres:5432/mydb
+    depends_on:
+      - postgres
+    volumes:
+      - ./app:/app
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # Service 2: ML Application (Frontend)
+  ml-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.ml
+    ports:
+      - "8501:8501"
+    depends_on:
+      - flask-api
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # Service 3: PostgreSQL Database
+  postgres:
+    image: postgres:13
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=mydb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Service 4: Redis Cache (Optional)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
+    restart: unless-stopped
+
+# Define volumes for data persistence
+volumes:
+  postgres_data:
+
+# Define networks
+networks:
+  app-network:
+    driver: bridge
+
+# ============================================================================
+# HOW TO USE THIS docker-compose.yml:
+#
+# 1. Start all services:
+#    docker-compose up -d
+#
+# 2. View running containers:
+#    docker-compose ps
+#
+# 3. View logs:
+#    docker-compose logs -f
+#
+# 4. Stop all services:
+#    docker-compose down
+#
+# 5. Remove everything (containers + volumes):
+#    docker-compose down -v
+#
+# WHAT THIS FILE DOES:
+# - Starts Flask API on port 5000
+# - Starts ML app (Streamlit) on port 8501
+# - Starts PostgreSQL database on port 5432
+# - Starts Redis cache on port 6379
+# - All containers can communicate via network 'app-network'
+# - Flask API waits for PostgreSQL to be ready (depends_on)
+# - ML app waits for Flask API (depends_on)
+# - Data persists in postgres_data volume
+#
+# NETWORKING:
+# - Inside Docker network, use service name as hostname
+# - Example: In Flask app, connect to: postgresql://user:password@postgres:5432/mydb
+# - From outside: Connect to: localhost:5432
+#
+# ============================================================================

@@ -1,0 +1,104 @@
+# Docker Compose file for running FastAPI Insurance API with supporting services
+# This is an advanced example for Chapter 8+ learning
+
+version: '3.8'
+
+services:
+  # Main FastAPI Application
+  insurance-api:
+    # Use the image we built in Chapter 8
+    build:
+      context: .
+      dockerfile: Dockerfile
+    
+    # Container name for easy reference
+    container_name: insurance-api
+    
+    # Port mapping: host_port:container_port
+    ports:
+      - "8000:8000"
+    
+    # Environment variables
+    environment:
+      - PYTHONUNBUFFERED=1
+      - API_VERSION=1.0
+    
+    # Volume mounting for development (auto-reload on code changes)
+    volumes:
+      - .:/app
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Resource limits (optional)
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # PostgreSQL Database (optional, for future extensions)
+  # postgres:
+  #   image: postgres:13-alpine
+  #   container_name: insurance-db
+  #   environment:
+  #     - POSTGRES_USER=admin
+  #     - POSTGRES_PASSWORD=password
+  #     - POSTGRES_DB=insurance_db
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U admin"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+  # Redis Cache (optional, for future extensions)
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: insurance-cache
+  #   ports:
+  #     - "6379:6379"
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+# Named volumes for persistent data
+# volumes:
+#   postgres_data:
+#     driver: local
+
+# Network configuration (optional)
+networks:
+  default:
+    name: insurance-network
+    driver: bridge
+
+# Usage:
+# ------
+# Start all services:
+#   docker-compose up -d
+#
+# View logs:
+#   docker-compose logs -f
+#
+# Stop all services:
+#   docker-compose down
+#
+# Rebuild and start:
+#   docker-compose up -d --build
