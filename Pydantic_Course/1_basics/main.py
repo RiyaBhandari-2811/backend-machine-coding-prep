@@ -162,6 +162,7 @@ print("EXAMPLE 6: Accessing Model Data")
 print("=" * 60)
 
 student = Student(student_id=1001, name="David", grade="A")
+# student = Student(1001, "David", "A") NOT VALID IN Pydantic v2
 print(f"✅ Student instance: {student}")
 
 # Access individual fields

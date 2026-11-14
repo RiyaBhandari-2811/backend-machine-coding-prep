@@ -196,6 +196,243 @@ See CHEATSHEET.md for complete command reference.
 
 ---
 
+## Interview Questions
+
+**Q1: What's the main difference between Docker and Virtual Machines?**
+A: VMs emulate entire OS; Docker shares host OS kernel, making containers lighter and faster.
+
+**Q2: What's the difference between a Docker image and a container?**
+A: Image is a blueprint (static file). Container is a running instance of that image.
+
+**Q3: What is a Dockerfile?**
+A: A text file with instructions to build a Docker image (FROM, RUN, COPY, CMD, etc.).
+
+**Q4: What does `docker build` do?**
+A: Reads Dockerfile and creates an image from it, following each instruction step-by-step.
+
+**Q5: What does `docker run` do?**
+A: Takes an image and creates/starts a new container from it.
+
+**Q6: What's a Docker registry?**
+A: A repository service that stores Docker images (Docker Hub, ECR, GCR, etc.).
+
+**Q7: What's the difference between `ENTRYPOINT` and `CMD` in Dockerfile?**
+A: ENTRYPOINT sets the main process; CMD provides default arguments (but can be overridden).
+
+**Q8: What are Docker layers?**
+A: Each Dockerfile instruction creates a layer. Layers stack to form the final image.
+
+**Q9: How do you see a container's logs?**
+A: Use `docker logs <container_id>` command.
+
+**Q10: Can you have multiple containers running from the same image?**
+A: YES! Each container is independent, even if from the same image.
+
+---
+
+## 🤔 Confusing Questions (Follow-Up Interview Questions)
+
+### Q11: If you have 10 containers running from the same image, does each container have its own copy of files?
+
+**Answer:**
+
+NO! They share the image layers (read-only), but each has its own writable layer:
+
+```
+Image (shared, read-only):
+├── Layer 1: Base OS files
+├── Layer 2: Dependencies
+└── Layer 3: App code
+
+Container 1 (writable layer):
+├── Changes made to files
+└── New files created
+
+Container 2 (writable layer):
+├── Independent copy of changes
+└── Independent files
+```
+
+**This saves disk space!** Multiple containers can run from one image efficiently.
+
+---
+
+### Q12: What happens if you `docker run` the same image twice without stopping the first container?
+
+**Answer:**
+
+Two separate containers run independently:
+
+```bash
+docker run my-app  # Container A starts
+docker run my-app  # Container B starts (separate from A)
+
+# Both running simultaneously, isolated from each other
+docker ps
+# CONTAINER ID | IMAGE   | STATUS
+# abc123       | my-app  | Up 2 minutes
+# def456       | my-app  | Up 1 minute
+```
+
+---
+
+### Q13: Can you modify files inside a running container?
+
+**Answer:**
+
+YES! Changes go to the container's writable layer (not the image):
+
+```bash
+docker run -it ubuntu
+# Inside container:
+echo "Hello" > /data/file.txt  # ✅ Works
+
+docker ps  # See the container
+docker exec <container_id> cat /data/file.txt  # "Hello"
+
+# But stop/remove the container, and changes are GONE
+docker rm <container_id>  # Data lost!
+```
+
+**This is why you use volumes for persistent data.**
+
+---
+
+### Q14: If you change a Dockerfile and rebuild, do all images get updated?
+
+**Answer:**
+
+NO! Old images remain unchanged. Rebuild creates a NEW image:
+
+```bash
+# Build v1
+docker build -t my-app:1.0 .
+# Creates image: my-app:1.0
+
+# Modify Dockerfile
+# Build v2
+docker build -t my-app:2.0 .
+# Creates image: my-app:2.0
+
+docker images
+# REPOSITORY | TAG | IMAGE ID
+# my-app     | 1.0 | abc123 (old, unchanged)
+# my-app     | 2.0 | def456 (new)
+```
+
+---
+
+### Q15: What does `FROM` in a Dockerfile mean?
+
+**Answer:**
+
+Base image that all layers build upon:
+
+```dockerfile
+FROM ubuntu:20.04  # Start with Ubuntu OS
+FROM python:3.9    # Start with Python already installed
+FROM alpine:latest # Start with lightweight Alpine
+
+# Everything after FROM builds on this foundation
+```
+
+**If FROM is missing, Dockerfile is invalid!**
+
+---
+
+### Q16: Can you have a Dockerfile with no `RUN` commands?
+
+**Answer:**
+
+YES! But it would be useless:
+
+```dockerfile
+FROM ubuntu:20.04
+COPY myfile.txt /app/
+
+# No RUN, no CMD - what would container do?
+
+# Usually you need:
+FROM ubuntu:20.04
+RUN apt-get install -y python3  # Install things
+COPY myfile.txt /app/
+CMD ["python3", "/app/script.py"]  # What to run
+```
+
+---
+
+### Q17: If a `RUN` command in Dockerfile fails, does the build continue?
+
+**Answer:**
+
+NO! Build stops and fails:
+
+```dockerfile
+FROM ubuntu:20.04
+RUN apt-get update
+RUN apt-get install -y python3
+RUN echo "Hello"  # ✅ Runs
+RUN false  # ❌ FAILS - Build stops here!
+RUN echo "This never runs"  # Not executed
+```
+
+---
+
+### Q18: What's the difference between `docker stop` and `docker kill`?
+
+**Answer:**
+
+- **stop:** Graceful shutdown (SIGTERM signal)
+- **kill:** Forceful termination (SIGKILL signal)
+
+```bash
+docker stop <container_id>   # ✅ Gives app time to cleanup
+docker kill <container_id>   # ❌ Forces immediate termination
+
+# Stop: App receives signal, saves state, exits
+# Kill: Immediate termination, potential data loss
+```
+
+---
+
+### Q19: Can you run a container and directly execute a different command?
+
+**Answer:**
+
+YES! Override the image's CMD:
+
+```dockerfile
+# In Dockerfile
+CMD ["python", "app.py"]
+
+# But you can override:
+docker run my-app python debug.py  # ← Runs debug.py instead!
+docker run my-app bash  # ← Opens bash instead of app.py!
+```
+
+---
+
+### Q20: What happens if the `CMD` process in a container exits/crashes?
+
+**Answer:**
+
+Container stops automatically:
+
+```bash
+docker run my-app
+# Container runs main process
+# If process exits, container stops
+# Container automatically removed if --rm flag used
+
+# Container status:
+docker ps  # Empty (not running)
+docker ps -a  # Shows stopped container
+```
+
+**This is key:** Containers are tied to their main process. No process = no container.
+
+---
+
 ## Next Steps
 
 → Continue to **Module 2: Practical Implementation**

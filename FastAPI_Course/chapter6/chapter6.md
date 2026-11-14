@@ -299,6 +299,531 @@ A: Store models as `model_v1.pkl`, `model_v2.pkl`. Load based on version query p
 
 ---
 
+## 🤔 Confusing Questions (Follow-Up Interview Questions)
+
+### Q11: Can you load multiple different ML models simultaneously? What's the memory cost?
+
+**Answer:**
+
+YES, but each model consumes memory:
+
+```python
+import pickle
+
+# Load multiple models at startup
+model_v1 = pickle.load(open('model_v1.pkl', 'rb'))
+model_v2 = pickle.load(open('model_v2.pkl', 'rb'))
+model_v3 = pickle.load(open('model_v3.pkl', 'rb'))
+
+@app.post("/predict")
+async def predict(data: UserInput, version: int = 1):
+    if version == 1:
+        return model_v1.predict(...)
+    elif version == 2:
+        return model_v2.predict(...)
+    # etc
+```
+
+**Memory considerations:**
+
+```
+model_v1: 50 MB
+model_v2: 50 MB
+model_v3: 50 MB
+Total: 150 MB in memory
+
+Prediction time: Fast (models already loaded)
+Startup time: Slow (wait for all models to load)
+Memory usage: High (all models stay in RAM)
+```
+
+**Alternatives:**
+
+```python
+# Load on-demand (lazy loading)
+models = {}
+
+def get_model(version):
+    if version not in models:
+        models[version] = pickle.load(open(f'model_v{version}.pkl', 'rb'))
+    return models[version]
+
+# Pros: Lower startup time
+# Cons: First prediction with new version is slow
+```
+
+---
+
+### Q12: What if the ML model prediction crashes? Does the entire API crash?
+
+**Answer:**
+
+NO! FastAPI handles exceptions gracefully:
+
+```python
+@app.post("/predict")
+async def predict_premium(data: UserInput):
+    try:
+        predictions = model.predict(...)
+        return {"premium": predictions[0]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+        # API returns 500 error, but doesn't crash
+        # Can handle next request normally
+```
+
+**What CAN crash the API:**
+
+```python
+# ❌ Loading model crashes at startup
+@app.on_event("startup")
+async def startup():
+    global model
+    model = pickle.load(open('nonexistent.pkl'))  # ← Crashes here!
+    # API never starts!
+
+# Solution: Use try-except at startup too
+@app.on_event("startup")
+async def startup():
+    global model
+    try:
+        model = pickle.load(open('model.pkl', 'rb'))
+    except Exception as e:
+        print(f"Warning: Model loading failed: {e}")
+        model = None  # Use default model or None
+```
+
+---
+
+### Q13: Can you use a Tensorflow/PyTorch model directly, or must it be pickled?
+
+**Answer:**
+
+Both work, but pickling is simpler:
+
+```python
+# ✅ Pickled model (simpler)
+import pickle
+model = pickle.load(open('model.pkl', 'rb'))
+
+# ✅ TensorFlow model
+import tensorflow as tf
+model = tf.keras.models.load_model('model.h5')
+
+# ✅ PyTorch model
+import torch
+model = torch.load('model.pth')
+
+# ✅ Scikit-learn model (native pickle support)
+from joblib import load  # Better than pickle for sklearn!
+model = load('model.joblib')
+```
+
+**Comparison:**
+
+| Format | Pros | Cons |
+|--------|------|------|
+| Pickle | Simple, Python native | Not cross-language |
+| TensorFlow | Production-ready | Large file size |
+| PyTorch | GPU support | Slower startup |
+| Joblib | sklearn optimized | sklearn-specific |
+
+**Best practice:**
+
+```python
+# For scikit-learn: Use joblib
+from joblib import load
+model = load('model.joblib')  # Better than pickle!
+
+# For TensorFlow: Use native format
+model = tf.keras.models.load_model('model')
+
+# For PyTorch: Use torch.load
+model = torch.load('model.pth')
+```
+
+---
+
+### Q14: What happens if the model pickled file is corrupted? Can you validate it before using?
+
+**Answer:**
+
+Pickle loads corrupt files and crashes:
+
+```python
+# ❌ No validation
+model = pickle.load(open('model.pkl', 'rb'))
+# If file is corrupted → UnpicklingError
+
+# ✅ With validation
+import pickle
+import os
+
+def load_model_safely(filepath):
+    # Check file exists
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"Model file not found: {filepath}")
+    
+    # Check file size (sanity check)
+    size = os.path.getsize(filepath)
+    if size < 1000:  # Less than 1KB is suspicious
+        raise ValueError(f"Model file too small: {size} bytes")
+    
+    try:
+        with open(filepath, 'rb') as f:
+            model = pickle.load(f)
+        return model
+    except (pickle.UnpicklingError, EOFError) as e:
+        raise ValueError(f"Failed to load model: {e}")
+    except Exception as e:
+        raise ValueError(f"Unexpected error loading model: {e}")
+
+# Usage
+try:
+    model = load_model_safely('model.pkl')
+except ValueError as e:
+    print(f"Error: {e}")
+    # Use backup model or return error to user
+```
+
+---
+
+### Q15: Can you use GET for predictions if the input is simple (not complex)?
+
+**Answer:**
+
+Technically yes, but it's BAD PRACTICE:
+
+```python
+# ❌ BAD - Using GET for predictions
+@app.get("/predict")
+async def predict(age: int, weight: float, height: float):
+    result = model.predict([[age, weight, height]])
+    return {"prediction": result[0]}
+
+# URL: /predict?age=30&weight=75&height=1.8
+# Problem: URL gets very long for many features
+# Problem: Data visible in browser history
+# Problem: Breaks REST convention (GET shouldn't process/modify)
+
+
+# ✅ GOOD - Using POST
+@app.post("/predict")
+async def predict(data: UserInput):
+    result = model.predict([data.model_dump()])
+    return {"prediction": result[0]}
+
+# Request body: {...}
+# Better: Private, organized, RESTful
+```
+
+**When GET might make sense:**
+
+```python
+# GET for simple cached queries
+@app.get("/model-info")
+async def get_model_info():
+    return {
+        "version": "v1.0",
+        "accuracy": 0.95,
+        "features": ["age", "weight", "height"]
+    }
+```
+
+---
+
+### Q16: What if the model requires feature scaling (normalization) but you forget to apply it?
+
+**Answer:**
+
+Model will give WRONG predictions:
+
+```python
+# Training data was scaled (-1 to 1)
+# Test data NOT scaled (0 to 100)
+# Model learns patterns in scaled space
+# Makes predictions on unscaled data
+# → GARBAGE predictions!
+
+# ✅ Correct approach
+from sklearn.preprocessing import StandardScaler
+import pickle
+
+# During training
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+model.fit(X_train_scaled, y_train)
+
+# Save both model AND scaler
+pickle.dump((model, scaler), open('model.pkl', 'wb'))
+
+# During inference
+model, scaler = pickle.load(open('model.pkl', 'rb'))
+
+@app.post("/predict")
+async def predict(data: UserInput):
+    # Scale input before prediction!
+    features = [[data.age, data.weight, data.height]]
+    features_scaled = scaler.transform(features)
+    prediction = model.predict(features_scaled)
+    return {"prediction": prediction[0]}
+```
+
+**Common mistake:**
+
+```python
+# ❌ Save only model, forget scaler
+pickle.dump(model, open('model.pkl', 'wb'))
+
+# Later, inference without scaling
+# → Wrong predictions!
+
+# ✅ Save both together
+state = {'model': model, 'scaler': scaler}
+pickle.dump(state, open('model.pkl', 'wb'))
+
+# Later, load both
+state = pickle.load(open('model.pkl', 'rb'))
+model = state['model']
+scaler = state['scaler']
+```
+
+---
+
+### Q17: How do you prevent the API from serving stale predictions from a cached model?
+
+**Answer:**
+
+Problem: If model is retrained, old model is still in memory:
+
+```python
+# Model loaded at startup
+@app.on_event("startup")
+async def startup():
+    global model
+    model = pickle.load(open('model.pkl', 'rb'))
+
+# If model.pkl is updated on disk
+# Old model stays in memory!
+# API serves stale predictions!
+
+# ✅ Solution 1: Reload on each request (slow)
+@app.post("/predict")
+async def predict(data: UserInput):
+    model = pickle.load(open('model.pkl', 'rb'))  # Load fresh
+    prediction = model.predict(...)
+    return {"prediction": prediction[0]}
+
+# ✅ Solution 2: Check file modification time
+import os
+import time
+
+last_modified = 0
+
+def get_model():
+    global model, last_modified
+    current_modified = os.path.getmtime('model.pkl')
+    if current_modified != last_modified:
+        model = pickle.load(open('model.pkl', 'rb'))
+        last_modified = current_modified
+    return model
+
+@app.post("/predict")
+async def predict(data: UserInput):
+    current_model = get_model()  # Loads fresh if updated
+    prediction = current_model.predict(...)
+    return {"prediction": prediction[0]}
+
+# ✅ Solution 3: Model versioning endpoint
+@app.post("/predict")
+async def predict(data: UserInput, version: str = "latest"):
+    model = pickle.load(open(f'models/model_{version}.pkl', 'rb'))
+    prediction = model.predict(...)
+    return {"prediction": prediction[0]}
+
+# Usage: /predict?version=v2.1 (get specific version)
+```
+
+---
+
+### Q18: Can the Pydantic model do feature engineering (like creating new features)?
+
+**Answer:**
+
+YES! Using computed fields:
+
+```python
+from pydantic import BaseModel, computed_field
+import math
+
+class UserInput(BaseModel):
+    age: int
+    weight: float
+    height: float
+    income: float
+    
+    @computed_field
+    @property
+    def bmi(self) -> float:
+        return self.weight / (self.height ** 2)
+    
+    @computed_field
+    @property
+    def age_group(self) -> str:
+        if self.age < 30:
+            return "young"
+        elif self.age < 60:
+            return "middle"
+        else:
+            return "senior"
+    
+    @computed_field
+    @property
+    def income_per_year(self) -> float:
+        return self.income * 12
+    
+    @computed_field
+    @property
+    def log_income(self) -> float:
+        return math.log(self.income + 1)
+
+# All features computed automatically!
+user = UserInput(age=35, weight=75, height=1.75, income=5000)
+features = user.model_dump()
+# {age: 35, weight: 75, height: 1.75, income: 5000, bmi: 24.5, age_group: "middle", ...}
+
+# Pass to model
+X = [[features['age'], features['bmi'], features['age_group']]]
+prediction = model.predict(X)
+```
+
+---
+
+### Q19: What's the performance difference between sync and async endpoints for predictions?
+
+**Answer:**
+
+Async is better for CONCURRENT requests:
+
+```python
+# ❌ Sync endpoint (blocks)
+@app.post("/predict")
+def predict_sync(data: UserInput):
+    prediction = model.predict(...)
+    return {"prediction": prediction}
+
+# If 10 requests come simultaneously:
+# Request 1: Predicts (2 seconds) → blocks others
+# Request 2: Waits (can't predict yet)
+# Request 3: Waits (can't predict yet)
+# Total time: 20 seconds (10 requests × 2 seconds each)
+
+
+# ✅ Async endpoint (non-blocking)
+@app.post("/predict")
+async def predict_async(data: UserInput):
+    prediction = model.predict(...)  # Assume 2 seconds
+    return {"prediction": prediction}
+
+# If 10 requests come simultaneously:
+# Requests 1-10: All start predicting "concurrently"
+# Since prediction is CPU-bound, still takes ~2 seconds total (but handled together)
+# Total time: ~2 seconds (all 10 requests in parallel)
+```
+
+**BUT: ML predictions are usually CPU-bound (not I/O-bound)!**
+
+```python
+# CPU-bound prediction
+prediction = model.predict(X)  # Takes 100% CPU for 2 seconds
+# Async doesn't help much here (still blocking CPU)
+
+# I/O-bound operation
+result = await database.query()  # Async helps (non-blocking wait)
+```
+
+**Best practice:**
+
+```python
+# Use async for I/O operations
+@app.post("/predict")
+async def predict(data: UserInput):
+    # Async: Log to async database
+    await db.insert_log(data)
+    
+    # Sync: CPU-bound prediction
+    prediction = model.predict(...)  # Still blocking, but OK
+    
+    return {"prediction": prediction}
+
+# For better concurrency with CPU-bound, use:
+# - Multiple workers (Gunicorn)
+# - Process pools (ProcessPoolExecutor)
+# - Distributed inference (Ray, Dask)
+```
+
+---
+
+### Q20: Can you serve predictions without the model? What if model loading fails?
+
+**Answer:**
+
+YES! Use a default/fallback model:
+
+```python
+# Load with fallback
+model = None
+
+@app.on_event("startup")
+async def startup():
+    global model
+    try:
+        model = pickle.load(open('model.pkl', 'rb'))
+    except Exception as e:
+        print(f"Warning: Failed to load model: {e}")
+        model = None  # Use default
+
+@app.post("/predict")
+async def predict(data: UserInput):
+    if model is None:
+        # Use default prediction logic
+        return {
+            "prediction": "unknown",
+            "confidence": 0.0,
+            "warning": "Model not loaded, using default"
+        }
+    
+    # Use actual model
+    prediction = model.predict(...)
+    return {"prediction": prediction[0]}
+```
+
+**Strategies:**
+
+```python
+# Strategy 1: Always have a fallback
+DEFAULT_PREDICTION = 0.5
+
+# Strategy 2: Return 503 Service Unavailable
+if model is None:
+    raise HTTPException(503, "Model not ready")
+
+# Strategy 3: Use backup model
+try:
+    model = pickle.load(open('model.pkl', 'rb'))
+except:
+    model = pickle.load(open('model_backup.pkl', 'rb'))
+
+# Strategy 4: Health check endpoint
+@app.get("/health")
+async def health_check():
+    return {"model_loaded": model is not None}
+
+# Client can check health before making predictions
+```
+
+---
+
 ## Deployment Considerations
 
 ### Local Development

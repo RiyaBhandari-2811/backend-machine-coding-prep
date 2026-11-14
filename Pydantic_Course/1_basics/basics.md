@@ -200,6 +200,279 @@ class Book(BaseModel):
 
 ---
 
+## Interview Questions
+
+**Q1: What's the main purpose of Pydantic?**
+A: Validate and parse data automatically, convert types, and catch errors early.
+
+**Q2: Why use Pydantic instead of regular Python classes?**
+A: Type checking, automatic conversion, validation, and clear error messages.
+
+**Q3: What happens if you pass the wrong type to a Pydantic model?**
+A: It tries to convert it. If conversion fails, raises ValidationError.
+
+**Q4: Can you modify a Pydantic object after creation?**
+A: By default NO (immutable). But you can use `model_config` to allow it.
+
+**Q5: What does `model_dump()` return?**
+A: A Python dictionary with all model fields and values.
+
+**Q6: What does `model_dump_json()` return?**
+A: A JSON string representation of the model.
+
+**Q7: How do you access a field from a Pydantic model?**
+A: Use dot notation: `model.field_name`
+
+**Q8: What's the difference between `BaseModel` and a regular class?**
+A: BaseModel adds validation, type checking, and serialization capabilities.
+
+**Q9: Can Pydantic convert strings to numbers?**
+A: Yes! `"123"` converts to `123`, but `"abc"` doesn't convert to int.
+
+**Q10: What happens if a required field is missing?**
+A: ValidationError is raised with details about which field is missing.
+
+---
+
+## 🤔 Confusing Questions (Follow-Up Interview Questions)
+
+### Q11: If you define a model with `name: str`, can you pass `name=None`?
+
+**Answer:**
+
+NO! `None` is rejected for required fields:
+
+```python
+class User(BaseModel):
+    name: str  # Required, non-optional
+
+# ❌ This FAILS
+user = User(name=None)
+# ValidationError: Input should be a valid string
+
+# ✅ This WORKS
+user = User(name="John")
+
+# To allow None, use Optional:
+class User(BaseModel):
+    name: Optional[str] = None  # Now None is allowed
+    
+user = User(name=None)  # ✅ Works
+```
+
+---
+
+### Q12: What's the difference between `name: str = None` and `name: Optional[str] = None`?
+
+**Answer:**
+
+They look similar but have DIFFERENT meanings:
+
+```python
+# ❌ WRONG - This will fail!
+class User(BaseModel):
+    name: str = None
+# ValidationError: name=None is invalid (str doesn't accept None)
+
+# ✅ CORRECT - This works
+class User(BaseModel):
+    name: Optional[str] = None
+# Optional[str] explicitly allows str OR None
+```
+
+**Why the difference:**
+
+```
+str = "only strings allowed"
+Optional[str] = "strings OR None allowed"
+```
+
+---
+
+### Q13: Can you create a Pydantic model without any fields?
+
+**Answer:**
+
+YES, but it's unusual:
+
+```python
+# Empty model
+class Empty(BaseModel):
+    pass
+
+obj = Empty()  # ✅ Works, empty object
+print(obj.model_dump())  # {}
+```
+
+**But it's useless!** Why would you want an empty model?
+
+---
+
+### Q14: If model_dump() returns a dict, can you modify it and the model stays the same?
+
+**Answer:**
+
+YES! Changes to the dict don't affect the model (they're separate objects):
+
+```python
+user = User(name="John", age=30)
+
+user_dict = user.model_dump()
+user_dict["name"] = "Alice"  # Modify dict
+
+print(user.name)  # "John" (unchanged)
+print(user_dict["name"])  # "Alice" (changed)
+```
+
+**This is key:** `model_dump()` creates a COPY, not a reference.
+
+---
+
+### Q15: Can you pass extra fields that aren't defined in the model?
+
+**Answer:**
+
+NO by default! Extra fields are ignored:
+
+```python
+class User(BaseModel):
+    name: str
+    age: int
+
+# Extra fields (city) are IGNORED
+user = User(name="John", age=30, city="Mumbai")
+print(user.model_dump())
+# {'name': 'John', 'age': 30}
+# city is gone!
+```
+
+**To allow extra fields:**
+
+```python
+class User(BaseModel):
+    model_config = ConfigDict(extra='allow')
+    name: str
+    age: int
+
+user = User(name="John", age=30, city="Mumbai")
+print(user.model_dump())
+# {'name': 'John', 'age': 30, 'city': 'Mumbai'}
+# city is included!
+```
+
+---
+
+### Q16: What happens if you create a model instance but don't provide all required fields?
+
+**Answer:**
+
+ValidationError is raised immediately:
+
+```python
+class User(BaseModel):
+    name: str
+    age: int
+    email: str
+
+# Missing email!
+user = User(name="John", age=30)
+# ValidationError: 1 validation error for User
+# email - Field required
+```
+
+---
+
+### Q17: Can you use type hints like `List[str]` in Pydantic models?
+
+**Answer:**
+
+YES! Pydantic supports complex types:
+
+```python
+from typing import List, Dict, Optional
+
+class User(BaseModel):
+    name: str
+    tags: List[str]  # List of strings
+    metadata: Dict[str, int]  # Dictionary
+    phone: Optional[str] = None  # Optional
+
+user = User(
+    name="John",
+    tags=["python", "fastapi"],
+    metadata={"age": 30, "score": 95},
+    phone=None
+)
+print(user.tags)  # ['python', 'fastapi']
+```
+
+---
+
+### Q18: If you call `model_dump_json()`, can you still access fields with dot notation?
+
+**Answer:**
+
+NO! `model_dump_json()` returns a STRING, not an object:
+
+```python
+user = User(name="John", age=30)
+
+user_json = user.model_dump_json()
+# '{"name":"John","age":30}'
+
+# ❌ Can't use dot notation on string
+print(user_json.name)  # AttributeError!
+
+# ✅ Can still use original object
+print(user.name)  # "John"
+
+# ✅ Parse JSON string back to dict, then access
+import json
+data = json.loads(user_json)
+print(data["name"])  # "John"
+```
+
+---
+
+### Q19: What's the performance difference between `str` and `Optional[str]`?
+
+**Answer:**
+
+NO significant difference! Pydantic handles both efficiently.
+
+```
+str: Validates is string
+Optional[str]: Validates is string OR None (slightly more checks)
+
+Difference: Microseconds (negligible)
+```
+
+---
+
+### Q20: Can you inherit from one Pydantic model to create another?
+
+**Answer:**
+
+YES! Pydantic supports inheritance:
+
+```python
+class Person(BaseModel):
+    name: str
+    age: int
+
+class Employee(Person):
+    employee_id: int
+    salary: float
+
+emp = Employee(name="John", age=30, employee_id=101, salary=50000)
+print(emp.model_dump())
+# {'name': 'John', 'age': 30, 'employee_id': 101, 'salary': 50000}
+
+# Employee inherits name and age from Person!
+```
+
+---
+
 ## Next Steps
 
 You now understand **why** Pydantic exists and **how** it works at a basic level.

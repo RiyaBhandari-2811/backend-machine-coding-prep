@@ -352,6 +352,223 @@ docker inspect -f '{{.NetworkSettings.IPAddress}}' container_id
 
 ---
 
+## Interview Questions
+
+**Q1: What's the difference between `docker run` and `docker exec`?**
+A: run creates a new container; exec executes a command in an already-running container.
+
+**Q2: How do you publish a container's port to the host?**
+A: Use `-p host_port:container_port` flag: `docker run -p 8000:5000 my-app`
+
+**Q3: What does `-v` flag do in `docker run`?**
+A: Mounts a volume (persistent storage) from host to container.
+
+**Q4: How do you pass environment variables to a container?**
+A: Use `-e` flag: `docker run -e VAR_NAME=value my-app`
+
+**Q5: What's the difference between `ENTRYPOINT` and `CMD` in practice?**
+A: ENTRYPOINT is the binary; CMD is the default argument (can be overridden at runtime).
+
+**Q6: How do you see a container's file system?**
+A: Use `docker exec -it container_id bash` to access the container shell.
+
+**Q7: Can you run multiple commands in a container at startup?**
+A: Yes, use a shell script as ENTRYPOINT or string commands with bash -c.
+
+**Q8: What does `docker-compose` solve?**
+A: Manages multiple containers as a single application (networks, volumes, dependencies).
+
+**Q9: How do you build and run a Docker app locally?**
+A: `docker build -t name:tag .` then `docker run name:tag`
+
+**Q10: What's the difference between `docker logs` and `docker exec`?**
+A: logs shows container output; exec runs new commands inside running container.
+
+---
+
+## 🤔 Confusing Questions (Follow-Up Interview Questions)
+
+### Q11: If you mount a volume to a path, does the container's existing files at that path get deleted?
+
+**Answer:**
+
+NO! But they become hidden/inaccessible:
+
+```bash
+# Container has /app/data/file.txt (in image)
+docker run -v /host/path:/app/data my-app
+
+# Inside container:
+# /app/data/file.txt is HIDDEN (replaced by mounted volume)
+# But file still exists in image layer, just inaccessible
+
+# Remove volume mount:
+docker run my-app  # Original file visible again
+```
+
+**This catches developers off-guard!**
+
+---
+
+### Q12: Can you run `docker exec` on a stopped container?
+
+**Answer:**
+
+NO! Container must be running:
+
+```bash
+docker exec container_id bash  # ❌ If container stopped
+# Error: container stopped
+
+docker start container_id  # Restart first
+docker exec container_id bash  # ✅ Now works
+```
+
+---
+
+### Q13: If you use `-e` to set environment variable, is it visible in the image?
+
+**Answer:**
+
+NO! Only visible inside the container at runtime:
+
+```bash
+docker run -e MY_VAR=secret my-app
+# MY_VAR is accessible inside container process
+
+# But the image doesn't store it:
+docker run my-app  # MY_VAR not set!
+
+# To persist in image, use ENV in Dockerfile:
+# FROM ubuntu
+# ENV MY_VAR=secret
+```
+
+---
+
+### Q14: What happens if a port is already in use on the host?
+
+**Answer:**
+
+Port mapping fails:
+
+```bash
+docker run -p 8000:5000 app1  # ✅ Uses host port 8000
+docker run -p 8000:5000 app2  # ❌ FAILS - port 8000 already in use
+# Error: Bind for 0.0.0.0:8000 failed: port is already allocated
+
+# Solution: Use different port
+docker run -p 8001:5000 app2  # ✅ Uses host port 8001
+```
+
+---
+
+### Q15: Can containers communicate with each other?
+
+**Answer:**
+
+YES! If on same network:
+
+```bash
+docker run --name db -d postgres
+docker run --link db my-app  # Can connect to 'db' hostname
+# OR
+docker network create mynet
+docker run --network mynet --name db postgres
+docker run --network mynet my-app  # Can resolve 'db'
+```
+
+---
+
+### Q16: If you `docker stop` a container, can you restart it?
+
+**Answer:**
+
+YES! Container persists (not deleted):
+
+```bash
+docker run my-app  # Container ABC starts
+docker stop ABC  # Container stops but exists
+
+docker ps  # Empty (not running)
+docker ps -a  # Shows ABC as Exited
+
+docker start ABC  # ✅ Restart same container
+# Same filesystem state as when stopped
+```
+
+---
+
+### Q17: What's the difference between `docker rm` and `docker rmi`?
+
+**Answer:**
+
+- **rm:** Remove container
+- **rmi:** Remove image
+
+```bash
+docker rm container_id  # Delete container
+docker rmi image_id  # Delete image
+
+# Once removed, data is gone (no recovery)
+```
+
+---
+
+### Q18: Can you mount a file (not directory) with `-v`?
+
+**Answer:**
+
+YES! Mount individual files:
+
+```bash
+docker run -v /host/config.txt:/app/config.txt my-app
+# Container reads /app/config.txt from host's /host/config.txt
+
+# Useful for:
+# - Passing config files
+# - Secrets
+# - Single file updates
+```
+
+---
+
+### Q19: If you modify a volume on host while container is running, does container see it immediately?
+
+**Answer:**
+
+YES! Volumes are real-time shared:
+
+```bash
+# Container running with mounted volume
+echo "new content" > /host/data.txt
+
+# Inside container (same file):
+docker exec container cat /mounted/data.txt
+# "new content" (sees change immediately!)
+```
+
+---
+
+### Q20: How do you see what ports a container is exposing?
+
+**Answer:**
+
+Use `docker ps` or `docker port`:
+
+```bash
+docker ps
+# Shows PORTS: 0.0.0.0:8000->5000/tcp
+
+docker port container_id
+# Shows: 5000/tcp -> 0.0.0.0:8000
+
+# Also check Dockerfile:
+# EXPOSE 5000  (documents port, doesn't actually expose it!)
+```
+
+---
+
 ## Next Steps
 
 → Continue to **Module 3: Advanced Topics**

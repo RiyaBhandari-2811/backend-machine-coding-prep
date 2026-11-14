@@ -338,6 +338,406 @@ A: Yes, but that requires PUT/PATCH endpoints (Update operation, covered later).
 
 ---
 
+## 🤔 Confusing Questions (Follow-Up Interview Questions)
+
+### Q11: Can you send a POST request with NO request body? What happens?
+
+**Answer:**
+
+If you send POST with no body, FastAPI returns **422 Unprocessable Entity** error because required fields are missing:
+
+```python
+@app.post("/patients", status_code=201)
+async def create_patient(patient: Patient):
+    pass
+
+# POST /patients (no body)
+# ❌ Error 422: "body: field required"
+
+# POST /patients with empty JSON: {}
+# ❌ Error 422: "patient_id: field required"
+```
+
+**Why?** All fields in the Pydantic model are required (no defaults).
+
+**To make body optional:**
+```python
+class PatientOptional(BaseModel):
+    patient_id: str = None  # Has default
+    name: str = None
+    # ... etc
+
+@app.post("/patients")
+async def create_patient(patient: PatientOptional):
+    pass
+
+# POST /patients with {} now works!
+```
+
+---
+
+### Q12: What's the difference between POST idempotency and GET idempotency? Why does it matter?
+
+**Answer:**
+
+| Aspect | GET | POST |
+|--------|-----|------|
+| **Idempotent?** | YES | NO |
+| **Multiple calls** | Same result | Different result |
+| **State change** | NO | YES |
+| **Safe to retry?** | YES | NO |
+
+**Example:**
+
+```python
+# GET - Idempotent (safe to call multiple times)
+GET /patients/5
+# Call 1: Returns patient 5 ✅
+# Call 2: Returns patient 5 ✅ (same result)
+# Call 3: Returns patient 5 ✅ (same result)
+# No side effects!
+
+# POST - NOT Idempotent (NOT safe to retry)
+POST /patients (create new patient)
+# Call 1: Creates patient P001 ✅
+# Call 2: Creates patient P002 ❌ (different result!)
+# Call 3: Creates patient P003 ❌ (different result!)
+# Multiple patients created!
+```
+
+**Why it matters:**
+
+In networks, packets can be lost and retried. If POST wasn't idempotent, retries could create duplicates!
+
+---
+
+### Q13: Can you send computed fields (BMI, verdict) in the POST request body? What happens?
+
+**Answer:**
+
+Technically yes, but FastAPI **ignores them** and **recalculates** them:
+
+```python
+from pydantic import BaseModel, computed_field
+
+class Patient(BaseModel):
+    patient_id: str
+    name: str
+    height: float
+    weight: float
+    
+    @computed_field
+    @property
+    def bmi(self) -> float:
+        return self.weight / (self.height ** 2)
+
+# Request body:
+{
+  "patient_id": "P001",
+  "name": "John",
+  "height": 1.8,
+  "weight": 72,
+  "bmi": 999  # ← Client sends this, but...
+}
+
+# FastAPI ignores client's bmi=999 and recalculates:
+# bmi = 72 / (1.8 ** 2) = 22.22
+# Response gets bmi=22.22, NOT 999!
+```
+
+**This is actually GOOD for security!** Client can't lie about computed values.
+
+---
+
+### Q14: What if I send extra fields in POST request body that aren't in the Pydantic model?
+
+**Answer:**
+
+By default, FastAPI **ignores extra fields**:
+
+```python
+class Patient(BaseModel):
+    patient_id: str
+    name: str
+    age: int
+
+# Request body (extra fields):
+{
+  "patient_id": "P001",
+  "name": "John",
+  "age": 30,
+  "extra_field": "ignored",
+  "another_field": "also ignored"
+}
+
+# Response: Works fine!
+# Extra fields are silently discarded
+```
+
+**But you can change this behavior:**
+
+```python
+from pydantic import ConfigDict
+
+class Patient(BaseModel):
+    model_config = ConfigDict(extra='forbid')  # Reject extra fields!
+    patient_id: str
+    name: str
+
+# Now sending extra fields causes error 422!
+```
+
+**Use cases:**
+- `extra='allow'` - Include extra fields in model
+- `extra='ignore'` - Discard extra fields (default)
+- `extra='forbid'` - Reject with error (stricter)
+
+---
+
+### Q15: Can POST endpoint return 200 instead of 201? Is it wrong?
+
+**Answer:**
+
+Technically it works, but it's **semantically wrong**:
+
+```python
+# ❌ WRONG - Wrong status code
+@app.post("/patients", status_code=200)
+async def create_patient(patient: Patient):
+    return patient
+
+# Response: 200 OK (but resource was CREATED!)
+# Client gets confused: "Was it created or just retrieved?"
+
+
+# ✅ CORRECT - Correct status code
+@app.post("/patients", status_code=201)
+async def create_patient(patient: Patient):
+    return patient
+
+# Response: 201 Created
+# Clear signal: "New resource created!"
+```
+
+**Why it matters:**
+
+REST clients and frameworks expect 201 for POST creation. They might:
+- Not cache 200 responses correctly
+- Expect Location header with 201
+- Log analytics differently
+
+**HTTP Standards say:**
+- **200 OK** - Request succeeded, result is in response
+- **201 Created** - New resource created at provided URI
+
+---
+
+### Q16: What if two clients POST the same patient simultaneously? How do you prevent duplicates?
+
+**Answer:**
+
+This is a **race condition** problem. With in-memory storage, you can get duplicates:
+
+```python
+# ❌ VULNERABLE to race condition
+@app.post("/patients", status_code=201)
+async def create_patient(patient: Patient):
+    # Simulate race condition
+    if patient.patient_id in data:
+        raise HTTPException(400, "Patient exists")  # But what if check passes, then another POST creates it?
+    # ... time gap where another request could slip in ...
+    data[patient.patient_id] = patient
+    return patient
+```
+
+**Solutions:**
+
+1. **Database unique constraint** (Best)
+```python
+# Database prevents duplicate IDs automatically
+```
+
+2. **Atomic check-and-insert**
+```python
+# Single operation, can't be interrupted
+data[patient_id] = patient_obj
+```
+
+3. **Lock/Mutex**
+```python
+import threading
+lock = threading.Lock()
+
+with lock:
+    if patient_id not in data:
+        data[patient_id] = patient_obj
+```
+
+4. **Distributed Lock** (if multiple servers)
+```python
+# Redis, Zookeeper, etc.
+```
+
+---
+
+### Q17: Does Pydantic model_dump() include computed fields?
+
+**Answer:**
+
+YES! That's the whole point:
+
+```python
+from pydantic import BaseModel, computed_field
+
+class Patient(BaseModel):
+    patient_id: str
+    weight: float
+    height: float
+    
+    @computed_field
+    @property
+    def bmi(self) -> float:
+        return self.weight / (self.height ** 2)
+
+patient = Patient(patient_id="P001", weight=72, height=1.8)
+
+# model_dump() includes BMI!
+data = patient.model_dump()
+print(data)
+# Output: {'patient_id': 'P001', 'weight': 72, 'height': 1.8, 'bmi': 22.22}
+
+# If you DON'T want computed fields:
+data = patient.model_dump(exclude={'bmi'})
+print(data)
+# Output: {'patient_id': 'P001', 'weight': 72, 'height': 1.8}
+```
+
+**Why include them?** Because they're part of the response! Client expects BMI in the response.
+
+---
+
+### Q18: What if the Pydantic model validation itself crashes? How do you handle that?
+
+**Answer:**
+
+If Pydantic validation crashes (bug in validator), FastAPI returns **500 Internal Server Error**:
+
+```python
+from pydantic import BaseModel, field_validator
+
+class Patient(BaseModel):
+    name: str
+    age: int
+    
+    @field_validator('age')
+    def validate_age(cls, v):
+        if v < 0:
+            raise ValueError("Age cannot be negative")
+        # What if there's a bug here?
+        result = 100 / v  # ← BUG: If v=0, crashes!
+        return result
+
+# POST with age=0
+# ❌ Error 500: "Internal Server Error" (ZeroDivisionError)
+```
+
+**To handle this, use try-except:**
+
+```python
+@field_validator('age')
+def validate_age(cls, v):
+    try:
+        if v < 0:
+            raise ValueError("Age cannot be negative")
+        result = 100 / v
+        return result
+    except ZeroDivisionError:
+        raise ValueError("Age cannot be zero")  # Returns 422, not 500
+
+# Now POST with age=0
+# ✅ Error 422: "Age cannot be zero" (proper validation error)
+```
+
+---
+
+### Q19: Can you use POST endpoint to retrieve data? What would be the response?
+
+**Answer:**
+
+Technically yes, but it's **bad practice**:
+
+```python
+# ❌ WRONG - Using POST to retrieve
+@app.post("/patients/get")
+async def get_patient(patient_id: str):
+    return data[patient_id]
+
+# ✅ CORRECT - Use GET
+@app.get("/patients/{patient_id}")
+async def get_patient(patient_id: int):
+    return data[patient_id]
+```
+
+**Problems with POST for retrieval:**
+
+1. **Semantically wrong** - POST is for creation, GET is for retrieval
+2. **Not cacheable** - GET responses can be cached, POST cannot
+3. **Not idempotent** - Breaks REST principles
+4. **Client confusion** - Is it creating or retrieving?
+5. **Browser incompatibility** - Can't test in browser URL bar
+
+**HTTP standards say:**
+- **GET** - Safe (read-only), idempotent, cacheable
+- **POST** - Unsafe (can modify state), not idempotent, not cacheable
+
+Always use the correct method!
+
+---
+
+### Q20: What's the difference between BaseModel and a plain Python dictionary for request body?
+
+**Answer:**
+
+Using Pydantic Model (Better):
+```python
+@app.post("/patients")
+async def create_patient(patient: Patient):
+    # ✅ Automatic validation
+    # ✅ Type hints (IDE autocomplete)
+    # ✅ Auto documentation (Swagger)
+    # ✅ Error messages
+    # ✅ Computed fields support
+    return patient
+```
+
+Using plain dict (Worse):
+```python
+@app.post("/patients")
+async def create_patient(patient: dict):
+    # ❌ No validation (any data accepted!)
+    # ❌ No type hints (no IDE help)
+    # ❌ No documentation
+    # ❌ Manual error handling
+    # ❌ Manual type conversion
+    return patient
+```
+
+**Comparison Table:**
+
+| Feature | BaseModel | dict |
+|---------|-----------|------|
+| **Validation** | ✅ Auto | ❌ Manual |
+| **Type hints** | ✅ Full | ❌ None |
+| **Documentation** | ✅ Auto Swagger | ❌ Manual |
+| **Error messages** | ✅ Clear | ❌ Must code |
+| **Default values** | ✅ Supported | ❌ Manual |
+| **Computed fields** | ✅ Supported | ❌ No |
+| **Code safety** | ✅ High | ❌ Low |
+
+**Always use Pydantic models!**
+
+---
+
 ## Summary
 
 ✅ **POST for Creation** - Use POST method for creating resources  

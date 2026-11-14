@@ -258,6 +258,280 @@ A: model_dump() returns a Python dict. model_dump_json() returns a JSON string.
 
 ---
 
+## 🤔 Confusing Questions (Follow-Up Interview Questions)
+
+### Q11: Can you have a @computed_field that depends on another @computed_field?
+
+**Answer:**
+
+YES! Computed fields can chain:
+
+```python
+from pydantic import BaseModel, computed_field
+
+class User(BaseModel):
+    first_name: str
+    last_name: str
+
+    @computed_field
+    @property
+    def full_name(self) -> str:
+        return f"{self.first_name} {self.last_name}"
+
+    @computed_field
+    @property
+    def full_name_uppercase(self) -> str:
+        return self.full_name.upper()  # ← Uses another computed field!
+
+user = User(first_name="john", last_name="doe")
+print(user.full_name)  # "john doe"
+print(user.full_name_uppercase)  # "JOHN DOE"
+```
+
+---
+
+### Q12: If you exclude a field in model_dump(), can you still access it on the object?
+
+**Answer:**
+
+YES! Exclude only affects the dict export:
+
+```python
+class User(BaseModel):
+    name: str
+    password: str
+
+user = User(name="john", password="secret123")
+
+# Exclude password from dict
+user_dict = user.model_dump(exclude={'password'})
+print(user_dict)  # {'name': 'john'} (password missing)
+
+# But object still has password!
+print(user.password)  # "secret123" (still there!)
+```
+
+**This is important for security:** Always exclude sensitive fields when returning to clients.
+
+---
+
+### Q13: Can you use `exclude` with nested models?
+
+**Answer:**
+
+YES! Use dot notation:
+
+```python
+class Address(BaseModel):
+    street: str
+    city: str
+    zip_code: str
+
+class User(BaseModel):
+    name: str
+    address: Address
+
+user = User(
+    name="john",
+    address=Address(street="123 Main", city="NYC", zip_code="10001")
+)
+
+# Exclude nested field
+user_dict = user.model_dump(exclude={'address': {'zip_code'}})
+print(user_dict)
+# {'name': 'john', 'address': {'street': '123 Main', 'city': 'NYC'}}
+# zip_code excluded!
+```
+
+---
+
+### Q14: What's the difference between `exclude` and `include` in model_dump()?
+
+**Answer:**
+
+- **exclude:** Remove fields from output
+- **include:** Keep ONLY specified fields
+
+```python
+user = User(name="john", age=30, email="john@example.com", phone="555-1234")
+
+# exclude: Remove these
+dict1 = user.model_dump(exclude={'phone', 'email'})
+# {'name': 'john', 'age': 30}
+
+# include: Keep ONLY these
+dict2 = user.model_dump(include={'name', 'age'})
+# {'name': 'john', 'age': 30}
+
+# Result is same, but approach is different!
+```
+
+---
+
+### Q15: Can model_dump_json() fail if your model has non-JSON types?
+
+**Answer:**
+
+YES! Some Python objects aren't JSON serializable:
+
+```python
+from datetime import datetime
+
+class Event(BaseModel):
+    name: str
+    date: datetime  # Pydantic handles this well
+
+event = Event(name="Meeting", date=datetime.now())
+
+# ✅ Works: Pydantic converts datetime to ISO string
+json_str = event.model_dump_json()
+print(json_str)  # {"name":"Meeting","date":"2024-01-15T10:30:00"}
+
+# ❌ But custom objects fail:
+class User(BaseModel):
+    name: str
+    file: open  # File object
+
+user = User(name="john", file=open("test.txt"))
+json_str = user.model_dump_json()  # ❌ TypeError! File not JSON serializable
+```
+
+---
+
+### Q16: Can you have circular references in nested models?
+
+**Answer:**
+
+YES! Using `from __future__ import annotations`:
+
+```python
+from __future__ import annotations
+from pydantic import BaseModel
+from typing import Optional
+
+class User(BaseModel):
+    name: str
+    friends: Optional[list[User]] = None  # ← Refers to itself!
+
+user_dict = {
+    "name": "John",
+    "friends": [
+        {"name": "Alice", "friends": None},
+        {"name": "Bob", "friends": None}
+    ]
+}
+
+user = User(**user_dict)
+print(user.friends[0].name)  # "Alice"
+```
+
+---
+
+### Q17: What happens if you call model_dump_json() on a very large model?
+
+**Answer:**
+
+It's generally fine, but watch performance:
+
+```python
+# Large nested model with thousands of items
+big_model = LargeModel(items=[...]*10000)
+
+# Converts all to JSON (might be slow)
+json_str = big_model.model_dump_json()
+print(len(json_str))  # Very large string!
+
+# Alternative: Use streaming or pagination
+# Don't dump huge models at once
+```
+
+---
+
+### Q18: Can you customize how model_dump_json() formats output?
+
+**Answer:**
+
+YES! Using `by_alias`, `indent`, etc:
+
+```python
+from pydantic import BaseModel, Field
+
+class User(BaseModel):
+    name: str = Field(alias="full_name")
+    age: int
+
+user = User(full_name="John", age=30)
+
+# Use aliases in JSON
+json1 = user.model_dump_json(by_alias=True)
+print(json1)  # {"full_name":"John","age":30}
+
+# Pretty print
+json2 = user.model_dump_json(indent=2)
+print(json2)
+# {
+#   "name": "John",
+#   "age": 30
+# }
+```
+
+---
+
+### Q19: If you inherit from a Pydantic model, can you override fields?
+
+**Answer:**
+
+YES, but with caveats:
+
+```python
+class User(BaseModel):
+    name: str
+    age: int
+
+class Admin(User):
+    role: str = "admin"
+    # age is inherited
+
+admin = Admin(name="John", age=30)  # ✅ Works
+
+# But be careful with validation:
+class Admin(User):
+    age: int = 18  # Override with default
+
+admin1 = Admin(name="John")  # age defaults to 18
+admin2 = Admin(name="John", age=50)  # age is 50
+```
+
+---
+
+### Q20: Can you use computed_field with parameters?
+
+**Answer:**
+
+NO! Computed fields take no parameters:
+
+```python
+class User(BaseModel):
+    price: float
+
+    # ❌ WRONG - Can't accept parameters
+    @computed_field
+    @property
+    def discount_price(self, percentage) -> float:  # ← No!
+        return self.price * (1 - percentage)
+
+    # ✅ CORRECT - Use default logic
+    @computed_field
+    @property
+    def discount_price(self) -> float:
+        return self.price * 0.9  # Always 10% discount
+
+user = User(price=100)
+print(user.discount_price)  # 90 (always 10% off)
+```
+
+---
+
 ## Use Cases
 
 ### Use Case 1: FastAPI Response Models

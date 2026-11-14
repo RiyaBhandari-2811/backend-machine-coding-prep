@@ -518,6 +518,228 @@ docker stats container_id
 
 ---
 
+## Interview Questions
+
+**Q1: What's Docker networking and why is it important?**
+A: Allows containers to communicate with each other and host; types: bridge, host, overlay, none.
+
+**Q2: What are volume strategies and when to use them?**
+A: Named volumes (production), bind mounts (development), tmpfs (temporary), temp volumes.
+
+**Q3: How do you secure a Docker container?**
+A: Use non-root user, minimize base image, scan for vulnerabilities, limit resources.
+
+**Q4: What's the difference between `COPY` and `ADD` in Dockerfile?**
+A: COPY copies files; ADD copies + can extract tar and fetch URLs (avoid unless needed).
+
+**Q5: How do you optimize Docker images for size?**
+A: Use alpine base, multi-stage builds, remove caches, minimize layers.
+
+**Q6: What's Docker Compose?**
+A: YAML tool to define and run multi-container applications with networks and volumes.
+
+**Q7: How do you scale containers in production?**
+A: Use orchestrators (Kubernetes, Docker Swarm) or cloud services (ECS, Cloud Run).
+
+**Q8: What's a multi-stage build?**
+A: Multiple FROM statements in Dockerfile to separate build and runtime environments.
+
+**Q9: How do you monitor Docker containers?**
+A: Use `docker stats`, logging drivers, APM tools (DataDog, New Relic, etc.).
+
+**Q10: What's the difference between `EXPOSE` and `-p` port mapping?**
+A: EXPOSE documents ports in image; `-p` actually publishes ports to host.
+
+---
+
+## 🤔 Confusing Questions (Follow-Up Interview Questions)
+
+### Q11: Can containers on different networks communicate with each other?
+
+**Answer:**
+
+NO! Containers must be on same network:
+
+```bash
+docker network create net1
+docker network create net2
+
+docker run --network net1 --name app1 my-app
+docker run --network net2 --name app2 my-app
+
+# From app1, trying to ping app2:
+docker exec app1 ping app2
+# ❌ Cannot reach (different networks)
+
+# Solution: Connect both to same network
+docker network connect net1 app2
+docker exec app1 ping app2  # ✅ Now works
+```
+
+---
+
+### Q12: If you use a named volume, where is data actually stored on host?
+
+**Answer:**
+
+Docker manages location (usually `/var/lib/docker/volumes/`):
+
+```bash
+docker run -v my-data:/app/data my-app
+# Data stored in: /var/lib/docker/volumes/my-data/_data/
+
+# You can inspect:
+docker inspect my-data  # Shows Mountpoint
+docker volume inspect my-data
+
+# Can't easily access without root permission!
+# This is why bind mounts useful for development
+```
+
+---
+
+### Q13: Can you have two containers writing to the same volume simultaneously?
+
+**Answer:**
+
+YES, but risks data corruption:
+
+```bash
+docker run -v shared:/data app1  # Writing to /data
+docker run -v shared:/data app2  # Also writing to /data
+
+# Both write simultaneously = potential corruption!
+# ⚠️ Solution: Use file locking or database with concurrency control
+```
+
+---
+
+### Q14: What happens if a multi-stage build fails at stage 2?
+
+**Answer:**
+
+Build fails, no image created:
+
+```dockerfile
+FROM ubuntu as builder
+RUN echo "Building..."  # ✅ Stage 1 succeeds
+
+FROM alpine
+COPY --from=builder /app /app
+RUN false  # ❌ Stage 2 fails!
+# Build stops here, no image created
+```
+
+---
+
+### Q15: Can you use `ENTRYPOINT` in a multi-stage build?
+
+**Answer:**
+
+Only the final stage's ENTRYPOINT matters:
+
+```dockerfile
+FROM ubuntu as builder
+RUN echo "build"
+ENTRYPOINT ["bash"]  # ❌ Ignored (not final stage)
+
+FROM alpine
+COPY --from=builder /app /app
+ENTRYPOINT ["python"]  # ✅ This is used!
+```
+
+---
+
+### Q16: If you set resource limits with `--memory 256m`, what happens when container exceeds it?
+
+**Answer:**
+
+Container crashes (OOMKilled):
+
+```bash
+docker run --memory 256m my-app
+
+# If process tries to use >256MB:
+# Docker kills container
+docker ps -a  # Shows status: OOMKilled
+```
+
+---
+
+### Q17: How does `--cpus 1.5` work?
+
+**Answer:**
+
+Limits container to 1.5 CPU cores:
+
+```bash
+docker run --cpus 1.5 my-app
+# Can use max 150% of one core (or 75% of two cores)
+
+docker run --cpus 2 my-app
+# Can use max 2 cores
+
+# Check actual usage:
+docker stats container_id  # Shows CPU %
+```
+
+---
+
+### Q18: What's the difference between bridge and host networking?
+
+**Answer:**
+
+- **bridge:** Container has own IP, port mapping required
+- **host:** Container shares host network, no port mapping
+
+```bash
+# Bridge (default)
+docker run -p 8000:5000 my-app  # Port mapping needed
+
+# Host
+docker run --network host my-app  # Direct access to host network
+# App on port 5000 is directly accessible on host:5000
+# No port mapping needed!
+```
+
+---
+
+### Q19: Can you use `tmpfs` volumes for persistent data?
+
+**Answer:**
+
+NO! tmpfs is in-memory, data lost when container stops:
+
+```bash
+docker run --tmpfs /tmp my-app
+# /tmp exists but only in memory
+
+# Good for: Temp files, caches
+# Bad for: Persistent data
+```
+
+---
+
+### Q20: How does Docker handle DNS resolution inside containers?
+
+**Answer:**
+
+Uses embedded DNS server (127.0.0.11:53):
+
+```bash
+docker run --name web my-app
+docker run --link web another-app
+
+# Inside another-app:
+nslookup web
+# Resolves to web container's IP!
+
+# Also /etc/hosts is auto-updated:
+cat /etc/hosts  # Shows: 172.x.x.x web
+```
+
+---
+
 ## Next Steps
 
 → Continue to **Module 4: Deployment & Production**
