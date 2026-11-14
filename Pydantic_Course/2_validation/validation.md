@@ -253,6 +253,209 @@ A: Use `Field(min_length=1, max_length=50)`.
 
 ---
 
+## 🤔 Confusing Questions (Follow-Up Interview Questions)
+
+### Q11: What's the difference between `Field(default=None)` and `Optional[str] = None`?
+
+**Answer:**
+
+They're almost the same, but Field() is more powerful:
+
+```python
+# Simple way
+class User(BaseModel):
+    name: Optional[str] = None
+
+# With Field() - more control
+class User(BaseModel):
+    name: Optional[str] = Field(None, description="User's full name", examples=["John"])
+
+# Both allow None, but Field() adds metadata for docs
+```
+
+---
+
+### Q12: If you use `strict=True`, what exactly happens?
+
+**Answer:**
+
+NO type conversion! Must be exact type:
+
+```python
+class User(BaseModel):
+    age: int = Field(strict=True)
+
+# ✅ Works (int)
+user = User(age=30)
+
+# ❌ Fails (string, even though "30" looks like int)
+user = User(age="30")
+# ValidationError: Input should be a valid integer
+
+# Without strict=True (default):
+class User(BaseModel):
+    age: int  # strict=False by default
+
+# ✅ Works (auto-converts)
+user = User(age="30")  # "30" → 30
+```
+
+---
+
+### Q13: Can you have BOTH `gt` (greater than) and `ge` (greater-equal)?
+
+**Answer:**
+
+NO! Only use ONE:
+
+```python
+# ❌ WRONG - Contradictory!
+class User(BaseModel):
+    age: int = Field(gt=18, ge=21)  # What does this mean? Confusing!
+
+# ✅ CORRECT - Use one
+class User(BaseModel):
+    age: int = Field(ge=18)  # Greater than or equal to 18
+
+class User(BaseModel):
+    age: int = Field(gt=18)  # Strictly greater than 18
+```
+
+---
+
+### Q14: What if you set `min_length=5` on an integer field?
+
+**Answer:**
+
+NO EFFECT! `min_length` only works for strings/sequences:
+
+```python
+class User(BaseModel):
+    age: int = Field(min_length=5)  # This is IGNORED!
+    name: str = Field(min_length=5)  # This works!
+
+user = User(age=3, name="John")  # ❌ Fails (name too short)
+user = User(age=3, name="Johnny")  # ✅ Works
+```
+
+**Use the right constraints:**
+- `ge/gt/le/lt` for numbers
+- `min_length/max_length` for strings/lists
+
+---
+
+### Q15: If you have `Field(ge=0, le=100)` and pass 101, what happens?
+
+**Answer:**
+
+ValidationError! Value rejected:
+
+```python
+class User(BaseModel):
+    score: int = Field(ge=0, le=100)
+
+user = User(score=101)
+# ValidationError: Input should be less than or equal to 100
+```
+
+---
+
+### Q16: Can you use regex validation with Field()?
+
+**Answer:**
+
+YES, using `pattern`:
+
+```python
+class User(BaseModel):
+    email: str = Field(pattern=r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+
+user = User(email="john@example.com")  # ✅ Works
+user = User(email="invalid-email")  # ❌ Fails regex
+```
+
+---
+
+### Q17: What does `Field(..., description="...")`  do?
+
+**Answer:**
+
+Adds documentation for Swagger/OpenAPI:
+
+```python
+class User(BaseModel):
+    name: str = Field(..., description="User's full name")
+    age: int = Field(..., description="Age in years", ge=0)
+
+# When you generate API docs (FastAPI), these descriptions appear
+# Doesn't affect validation, only documentation!
+```
+
+---
+
+### Q18: If you use `Field(default="John")`, is the field optional?
+
+**Answer:**
+
+YES! Default value makes it optional:
+
+```python
+class User(BaseModel):
+    name: str = Field(default="John")  # Optional (defaults to "John")
+    age: int  # Required
+
+user1 = User(age=30)  # name uses default "John"
+user2 = User(name="Alice", age=30)  # name is "Alice"
+```
+
+---
+
+### Q19: Can you use `Field()` with required fields (no default)?
+
+**Answer:**
+
+YES! Use `...` (Ellipsis) to mark required:
+
+```python
+class User(BaseModel):
+    name: str = Field(...)  # Required
+    age: int = Field(..., ge=0)  # Required with validation
+
+# Both fields must be provided
+user = User(name="John", age=30)  # ✅ Works
+user = User(age=30)  # ❌ Fails (missing name)
+```
+
+---
+
+### Q20: What's the difference between `min_length` and `ge`?
+
+**Answer:**
+
+Different purposes:
+
+```
+ge/gt/le/lt = Numbers comparison (greater-than, less-than)
+min_length/max_length = String/sequence length (count of characters/items)
+```
+
+**Example:**
+
+```python
+class User(BaseModel):
+    age: int = Field(ge=0, le=150)  # Age between 0-150
+    name: str = Field(min_length=1, max_length=50)  # Name 1-50 chars
+    tags: list = Field(min_length=1)  # At least 1 tag
+
+user = User(
+    age=30,  # Valid (0 ≤ 30 ≤ 150)
+    name="John",  # Valid (1-4 chars, ≤ 50)
+    tags=["python"]  # Valid (1 item ≥ 1)
+)
+```
+
+---
+
 ## Next Steps
 
 You now know how to add **validation constraints** to your models.

@@ -517,6 +517,270 @@ This module covers deploying Docker applications to production and comprehensive
 
 ---
 
+## Interview Questions
+
+**Q1: What's AWS ECS?**
+A: Elastic Container Service; AWS's container orchestration platform for running Docker containers at scale.
+
+**Q2: How does Docker integrate with CI/CD?**
+A: Build image in CI pipeline, run tests, push to registry, deploy to production.
+
+**Q3: What's a container registry?**
+A: Service that stores Docker images (Docker Hub, ECR, GCR); enables image versioning and distribution.
+
+**Q4: How do you deploy a Docker container to AWS?**
+A: Push image to ECR, create ECS task definition, launch service in ECS cluster.
+
+**Q5: What's Kubernetes and when do you need it?**
+A: Orchestrator for managing containers at scale; needed for production with many containers.
+
+**Q6: What's the difference between ECS and Kubernetes?**
+A: ECS is AWS-managed; Kubernetes is open-source, vendor-agnostic, more complex.
+
+**Q7: How do you handle secrets in Docker containers?**
+A: Use environment variables, secrets management services (AWS Secrets Manager, Vault).
+
+**Q8: What's a Docker registry and why use it?**
+A: Stores images centrally; enables team sharing, version control, automated deployments.
+
+**Q9: How do you scale a Docker application?**
+A: Horizontal: Run multiple container instances; Vertical: Increase container resources.
+
+**Q10: What's blue-green deployment with Docker?**
+A: Run two identical environments; switch traffic from blue (old) to green (new) for zero-downtime updates.
+
+---
+
+## 🤔 Confusing Questions (Follow-Up Interview Questions)
+
+### Q11: If you push an image with tag `latest`, can you push a different image with the same tag?
+
+**Answer:**
+
+YES! This OVERWRITES the previous image:
+
+```bash
+docker build -t my-app:latest .  # v1 built
+docker push my-app:latest  # Pushed to registry
+
+# Modify code
+docker build -t my-app:latest .  # v2 built (overwrites v1 locally)
+docker push my-app:latest  # ❌ OVERWRITES v1 in registry!
+
+# ⚠️ This is why use semantic versioning:
+docker tag my-app:latest my-app:1.0.0
+docker push my-app:1.0.0  # Specific version, can't be overwritten
+```
+
+---
+
+### Q12: What happens if deployment fails halfway?
+
+**Answer:**
+
+Depends on orchestrator, but generally:
+
+```
+Blue (old, running) ← All traffic
+Green (new, failed) ← Rollback to Blue
+```
+
+---
+
+### Q13: Can you run a Kubernetes pod without Docker?
+
+**Answer:**
+
+YES! Kubernetes supports multiple container runtimes (containerd, CRI-O):
+
+```yaml
+# Kubernetes can run:
+- Docker containers ✅
+- containerd ✅
+- CRI-O ✅
+- podman ✅
+
+# Docker is popular but not required for Kubernetes
+```
+
+---
+
+### Q14: If you have 100 running containers across multiple hosts, how do you manage them?
+
+**Answer:**
+
+Use orchestrator (Kubernetes, Swarm):
+
+```
+Without orchestrator:
+- SSH into each host manually
+- Run commands
+- Monitor each
+- Handle failures manually
+= CHAOS!
+
+With Kubernetes:
+- Single kubectl command
+- Auto-scaling
+- Self-healing
+- Rolling updates
+= MANAGEABLE!
+```
+
+---
+
+### Q15: What happens if a container crashes in production?
+
+**Answer:**
+
+Orchestrator automatically restarts it:
+
+```bash
+# Without orchestrator: Dead until you manually restart
+# With orchestrator (K8s/ECS): Auto-restarted based on restart policy
+
+apiVersion: v1
+kind: Pod
+spec:
+  restartPolicy: Always  # ← Auto-restart failed containers
+```
+
+---
+
+### Q16: How do you update production containers without downtime?
+
+**Answer:**
+
+Rolling update strategy:
+
+```
+Original (3 replicas running):
+v1, v1, v1
+
+Update starts:
+v1, v1, v2  (1 new instance)
+
+Continue:
+v1, v2, v2  (2 new instances)
+
+Complete:
+v2, v2, v2  (all new)
+
+Result: Zero downtime!
+```
+
+---
+
+### Q17: Can you deploy to Kubernetes without a registry?
+
+**Answer:**
+
+Technically NO for multi-node; impractical for single-node:
+
+```bash
+# Single node: Load image directly
+docker load < my-app.tar
+kubectl run my-app --image=my-app:latest
+
+# Multiple nodes: ❌ Image must be accessible to all nodes
+# Solution: Use registry
+docker push my-app:latest  # To registry
+kubectl run my-app --image=registry.example.com/my-app:latest
+```
+
+---
+
+### Q18: What's the difference between `replicas: 3` and HPA (Horizontal Pod Autoscaler)?
+
+**Answer:**
+
+- **replicas: 3:** Fixed 3 copies always running
+- **HPA:** Auto-scale between min/max based on metrics
+
+```yaml
+# Fixed
+spec:
+  replicas: 3  # Always 3
+
+# Auto-scaling
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: my-app-hpa
+spec:
+  scaleTargetRef:
+    name: my-app
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70  # Scale if CPU >70%
+```
+
+---
+
+### Q19: How do you handle database migrations in Dockerized apps?
+
+**Answer:**
+
+Run migrations BEFORE starting app:
+
+```dockerfile
+FROM python:3.9
+COPY . /app
+WORKDIR /app
+
+# Run migrations first
+CMD ["sh", "-c", "alembic upgrade head && python app.py"]
+```
+
+OR use init containers in Kubernetes:
+
+```yaml
+apiVersion: v1
+kind: Pod
+spec:
+  initContainers:
+  - name: migrate
+    image: my-app:latest
+    command: ["alembic", "upgrade", "head"]
+  containers:
+  - name: app
+    image: my-app:latest
+```
+
+---
+
+### Q20: Can you run a stateful app (like database) in Kubernetes?
+
+**Answer:**
+
+YES, but complex! Use StatefulSets:
+
+```yaml
+# StatefulSet maintains identity and storage
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+spec:
+  serviceName: postgres
+  replicas: 1
+  template:
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:13
+  volumeClaimTemplates:  # Persistent storage
+  - metadata:
+      name: postgres-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi
+```
+
+---
+
 ## Course Completion Checklist
 
 - [ ] Read all 4 modules
