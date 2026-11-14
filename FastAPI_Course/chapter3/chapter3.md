@@ -875,6 +875,494 @@ async def search_patients(
 
 ---
 
+## 🤔 Confusing Questions (Follow-Up Interview Questions)
+
+These are tricky questions interviewers ask to test deep understanding:
+
+### Q11: What happens if I don't use `...` in Path()? What if I just write Path()?
+
+**Answer:**
+
+If you remove `...` and don't provide a default, the parameter becomes **optional with None as default**:
+
+```python
+# ❌ WRONG - Confusing behavior
+@app.get("/patients/{patient_id}")
+async def get_patient(
+    patient_id: int = Path()  # Missing ... and default!
+):
+    return {"patient_id": patient_id}
+
+# This COMPILES but:
+# - patient_id becomes optional
+# - Default value is None
+# - But URL still requires it: /patients/{patient_id}
+# - Creates confusing behavior!
+```
+
+**Proper ways:**
+
+```python
+# ✅ Required
+@app.get("/patients/{patient_id}")
+async def get_patient(
+    patient_id: int = Path(...)  # Explicitly required
+):
+    pass
+
+# ✅ Optional (but rare for path params)
+@app.get("/patients/{patient_id}")
+async def get_patient(
+    patient_id: int = Path(default=None)
+):
+    pass
+```
+
+**Rule:** Always explicitly use `...` for required or provide a `default` value!
+
+---
+
+### Q12: Why don't we use the `new` keyword like `new Path(...)`? Why is it different from Java/C++?
+
+**Answer:**
+
+Python is **dynamically typed** and **doesn't require constructors** like Java or C++.
+
+**Java (with `new`):**
+```java
+Path myPath = new Path(...);  // Java requires 'new'
+```
+
+**Python (no `new` needed):**
+```python
+patient_id: int = Path(...)  # Python - no 'new' keyword needed
+```
+
+**Why the difference:**
+
+1. **Python is not compiled** - No need to explicitly allocate memory with `new`
+2. **Function calls create objects** - `Path(...)` is a function call that returns an object automatically
+3. **Syntactic sugar** - Python treats class instantiation like function calls
+
+**What's actually happening:**
+```python
+# Python automatically calls __init__() and __new__()
+Path(...)  # Is equivalent to: Path.__call__(...)
+           # Which creates and returns Path object
+
+# In Java you must be explicit:
+new Path(...)  // Must explicitly say "create new instance"
+```
+
+**Other Python examples:**
+```python
+# All of these create objects WITHOUT 'new'
+my_list = list()
+my_dict = dict()
+my_set = set()
+my_path = Path(...)
+```
+
+**Key Takeaway:** Python doesn't need `new` because it handles object creation automatically!
+
+---
+
+### Q13: What happens if I provide BOTH `...` AND a default value in Path()?
+
+**Answer:**
+
+You **cannot provide both** - it causes an error! FastAPI will reject it:
+
+```python
+# ❌ ERROR - Cannot have both ... and default
+@app.get("/patients/{patient_id}")
+async def get_patient(
+    patient_id: int = Path(..., default=5)  # INVALID!
+):
+    pass
+
+# Error: "Cannot specify both ... and default value"
+```
+
+**Why?** They are **mutually exclusive**:
+
+- `...` means "required" - no default
+- `default=value` means "optional" - has default
+
+**It's like saying:** "Required AND optional" - contradiction!
+
+```python
+# ✅ CORRECT - Choose ONE:
+
+# Option 1: Required (use ...)
+patient_id: int = Path(...)
+
+# Option 2: Optional (use default)
+patient_id: int = Path(default=5)
+```
+
+---
+
+### Q14: Can I make path parameters optional? What if I want `/patients` and `/patients/5` to both work?
+
+**Answer:**
+
+**Short answer:** Don't do it. Path parameters are always required.
+
+**Why:** Path parameters are for **resource identification**, not filtering. They should always be required.
+
+**If you need optional:**
+
+Create **separate endpoints** (better design):
+
+```python
+# ✅ CORRECT - Two separate endpoints
+@app.get("/patients")
+async def list_all_patients():
+    """Get all patients (no ID needed)"""
+    return {"patients": [...]}
+
+@app.get("/patients/{patient_id}")
+async def get_single_patient(
+    patient_id: int = Path(..., gt=0)
+):
+    """Get specific patient (ID required)"""
+    return {"patient_id": patient_id}
+
+# URLs:
+# /patients        → List all
+# /patients/5      → Get patient 5
+```
+
+**Wrong way (don't do this):**
+
+```python
+# ❌ WRONG - Trying to make path param optional
+@app.get("/patients/{patient_id}")
+async def get_patient(
+    patient_id: int = Path(default=None)  # Awkward!
+):
+    if patient_id is None:
+        return {"patients": [...]}
+    return {"patient_id": patient_id}
+
+# Problem: URL /patients doesn't match route /patients/{patient_id}
+# Will return 404 Not Found!
+```
+
+**Use Query Parameters for optional:**
+
+```python
+# ✅ CORRECT - Query params for optional filters
+@app.get("/patients")
+async def get_patients(
+    patient_id: int = Query(None, description="Optional filter")
+):
+    if patient_id:
+        return {"patient_id": patient_id}
+    return {"patients": [...]}
+
+# URLs:
+# /patients              → All patients
+# /patients?patient_id=5 → Filter by patient_id
+```
+
+---
+
+### Q15: What's the difference between `Path(...)` and `Path(default=None)`?
+
+**Answer:**
+
+| Aspect | `Path(...)` | `Path(default=None)` |
+|--------|------------|-------------------|
+| **Required?** | YES ✅ | NO ❌ |
+| **User must provide?** | YES | NO |
+| **Default value** | None (no default) | None |
+| **When not provided** | Returns 400 error | Uses None value |
+| **Use case** | Resource identification | Optional parameters |
+
+**Example:**
+
+```python
+# Required - MUST be provided
+@app.get("/patients/{patient_id}")
+async def get_patient(
+    patient_id: int = Path(...)
+):
+    pass
+
+# URL: /patients/5      ✅ Works
+# URL: /patients/       ❌ Error 400
+
+
+# Optional - Can be omitted
+@app.get("/patients/{patient_id}")
+async def get_patient(
+    patient_id: int = Path(default=None)
+):
+    pass
+
+# URL: /patients/5      ✅ Works (patient_id=5)
+# URL: /patients/       ✅ Works (patient_id=None)
+```
+
+**Real-world confusion:**
+
+Developers coming from other frameworks often think:
+```python
+# ❌ Thinking: "This should be optional"
+patient_id: int = Path(...)
+
+# ✓ Reality: "This is REQUIRED"
+# FastAPI will return 400 if not provided
+```
+
+---
+
+### Q16: What happens if I send a string value for an integer path parameter?
+
+**Answer:**
+
+FastAPI **automatically validates** and **rejects it** with a 422 error:
+
+```python
+@app.get("/patients/{patient_id}")
+async def get_patient(
+    patient_id: int = Path(...)
+):
+    return {"patient_id": patient_id}
+
+# Request: GET /patients/5
+# ✅ Works: patient_id=5 (integer)
+
+# Request: GET /patients/abc
+# ❌ Error 422: "value is not a valid integer"
+```
+
+**FastAPI does automatic type coercion:**
+
+```python
+# Works (string "5" → integer 5)
+GET /patients/5        → patient_id=5
+
+# Fails (string "abc" cannot convert to integer)
+GET /patients/abc      → Error 422
+
+# Complex type validation
+@app.get("/hospitals/{hospital_id}")
+async def get_hospital(
+    hospital_id: int = Path(..., gt=0, le=1000)
+):
+    pass
+
+GET /hospitals/500     → ✅ Works
+GET /hospitals/-5      → ❌ Error 422 (violates gt=0)
+GET /hospitals/5000    → ❌ Error 422 (violates le=1000)
+GET /hospitals/abc     → ❌ Error 422 (not integer)
+```
+
+**This is automatic validation!** No extra code needed.
+
+---
+
+### Q17: Why does FastAPI require `...` instead of something more readable like `required=True`?
+
+**Answer:**
+
+It's a **Pydantic convention** carried over to FastAPI.
+
+**Historical reason:**
+
+Pydantic (data validation library) uses `...` (Ellipsis) for required fields:
+
+```python
+from pydantic import BaseModel
+
+class Patient(BaseModel):
+    name: str  # Required (no default)
+    age: int   # Required (no default)
+    city: str = "Unknown"  # Optional (has default)
+
+# In Path/Query, FastAPI mirrors this pattern:
+from fastapi import Path, Query
+
+patient_id: int = Path(...)  # Mirrors Pydantic's "required" concept
+```
+
+**Why `...` instead of `required=True`?**
+
+1. **Consistency** - Matches Pydantic's design
+2. **Brevity** - `...` is shorter than `required=True`
+3. **Pythonic** - Ellipsis (`...`) is valid Python syntax
+4. **Legacy** - FastAPI copied Pydantic's approach
+
+**Other frameworks:**
+
+```javascript
+// JavaScript - More readable
+Path(required: true)
+
+// FastAPI - Following Pydantic
+Path(...)
+```
+
+**You could argue:** `required=True` is more readable, but `...` is Pythonic tradition.
+
+---
+
+### Q18: What happens if I use Path() for query parameters instead of Query()?
+
+**Answer:**
+
+**Short answer:** It doesn't work as intended. Use `Query()` for query parameters!
+
+```python
+# ❌ WRONG - Using Path for query parameter
+@app.get("/patients")
+async def get_patients(
+    age: int = Path(...)  # Wrong!
+):
+    pass
+
+# Problem: FastAPI expects path parameter {age} in URL
+# URL: /patients          → Error (missing path param)
+# URL: /patients/30       → Works but confusing!
+
+
+# ✅ CORRECT - Use Query for query parameters
+@app.get("/patients")
+async def get_patients(
+    age: int = Query(...)  # Correct!
+):
+    pass
+
+# URL: /patients?age=30   ✅ Works!
+```
+
+**Why the difference?**
+
+- **Path()** - Parameter comes from URL path: `/patients/{id}`
+- **Query()** - Parameter comes from query string: `/patients?id=5`
+- **FastAPI knows** where to look based on function signature
+
+**Mixing them up is a common mistake!**
+
+```python
+@app.get("/hospitals/{hospital_id}/patients")
+async def get_hospital_patients(
+    hospital_id: int = Path(...),           # From path: /hospitals/1/patients
+    age: int = Query(None),                 # From query: ?age=30
+    sort_by: str = Query("id")              # From query: ?sort_by=weight
+):
+    pass
+
+# ✅ Correct usage:
+# /hospitals/1/patients?age=30&sort_by=weight
+```
+
+---
+
+### Q19: If I define a path parameter but don't use it in the function, what happens?
+
+**Answer:**
+
+You get a **validation error** - unused parameters are not allowed!
+
+```python
+# ❌ ERROR - Declared but not used
+@app.get("/patients/{patient_id}")
+async def get_patients(
+    age: int = Query(...)  # Different parameter, patient_id not used!
+):
+    pass
+
+# Error: "path_id in path but not defined in function parameters"
+```
+
+**Must match URL declaration with function parameters:**
+
+```python
+# ✅ CORRECT
+@app.get("/patients/{patient_id}")
+async def get_patient(
+    patient_id: int = Path(...)  # Must match URL {patient_id}
+):
+    return {"patient_id": patient_id}
+```
+
+**Nested example:**
+
+```python
+# ✅ CORRECT - All path params used
+@app.get("/hospitals/{hospital_id}/wards/{ward_id}/patients/{patient_id}")
+async def get_patient(
+    hospital_id: int = Path(...),
+    ward_id: int = Path(...),
+    patient_id: int = Path(...)
+):
+    return {
+        "hospital_id": hospital_id,
+        "ward_id": ward_id,
+        "patient_id": patient_id
+    }
+```
+
+---
+
+### Q20: Why do we need to import Path and Query separately? Can't they be the same function?
+
+**Answer:**
+
+They **could technically** be the same function, but they're **separated for clarity**:
+
+```python
+# Current (Separate) - GOOD
+from fastapi import Path, Query
+
+patient_id: int = Path(...)    # Clear: from URL path
+age: int = Query(...)          # Clear: from query string
+
+
+# Could do this (Combined) - CONFUSING
+from fastapi import Param
+
+patient_id: int = Param(..., in_="path")
+age: int = Param(..., in_="query")
+
+
+# Or this (No distinction) - BAD
+patient_id: int = FastAPIParam(...)  # Where does it come from?
+```
+
+**Why separate?**
+
+1. **Developer Intent** - `Path()` vs `Query()` shows where data comes from
+2. **Documentation** - Swagger UI can show different sections
+3. **Validation Rules** - Path/Query have different defaults and rules
+4. **Error Messages** - Clear where validation failed
+5. **Best Practices** - Explicit is better than implicit (Pythonic)
+
+**Under the hood:** Path and Query probably inherit from the same base class!
+
+```python
+# Likely implementation (simplified)
+class Param:
+    def __init__(self, ..., in_location):
+        self.in_location = in_location
+
+class Path(Param):
+    def __init__(self, ...):
+        super().__init__(..., in_location="path")
+
+class Query(Param):
+    def __init__(self, ...):
+        super().__init__(..., in_location="query")
+```
+
+**Key Takeaway:** Separation makes code **clearer and more maintainable**!
+
+---
+
 ## Summary
 
 - **Path Parameters** identify specific resources in the URL path (required)
