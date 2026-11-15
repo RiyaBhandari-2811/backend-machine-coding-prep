@@ -473,6 +473,28 @@ print(emp.model_dump())
 
 ---
 
+## ⚠️ Important Note: Positional Arguments
+
+**In Pydantic v2, you CANNOT use positional arguments!**
+
+```python
+class Student(BaseModel):
+    student_id: int
+    name: str
+    grade: str
+
+# ✅ CORRECT - Use named arguments
+student1 = Student(student_id=1001, name="David", grade="A")
+
+# ❌ WRONG - Positional arguments don't work
+student2 = Student(1001, "David", "A")
+# TypeError: BaseModel.__init__() takes 1 positional argument but 4 were given
+
+# This is a KEY difference from Pydantic v1!
+```
+
+---
+
 ## Next Steps
 
 You now understand **why** Pydantic exists and **how** it works at a basic level.
